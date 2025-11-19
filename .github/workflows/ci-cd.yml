@@ -13,13 +13,27 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # Needed for Trivy security scan results
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for git tag detection
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Generate version tag
+        id: version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="v0.0.0-$(echo ${{ github.sha }} | cut -c1-7)"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
 
       # ===== FRONTEND =====
       - name: Setup Node.js
@@ -38,8 +52,15 @@ jobs:
         run: npm run lint
 
       - name: Build frontend Docker image
+        id: build-frontend
         run: |
-          docker build -t ghcr.io/fajarriswandi/dms-frontend:latest ./frontend
+          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          FRONTEND_IMAGE="ghcr.io/${REPO_OWNER}/dms-frontend:${{ steps.version.outputs.version }}"
+          docker build \
+            -t ${FRONTEND_IMAGE} \
+            -t ghcr.io/${REPO_OWNER}/dms-frontend:latest \
+            ./frontend
+          echo "image=${FRONTEND_IMAGE}" >> $GITHUB_OUTPUT
 
       # ===== BACKEND =====
       - name: Setup Go
@@ -59,8 +80,48 @@ jobs:
         run: go test ./... -v
 
       - name: Build backend Docker image
+        id: build-backend
         run: |
-          docker build -t ghcr.io/fajarriswandi/dms-backend:latest ./backend
+          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          BACKEND_IMAGE="ghcr.io/${REPO_OWNER}/dms-backend:${{ steps.version.outputs.version }}"
+          docker build \
+            -t ${BACKEND_IMAGE} \
+            -t ghcr.io/${REPO_OWNER}/dms-backend:latest \
+            ./backend
+          echo "image=${BACKEND_IMAGE}" >> $GITHUB_OUTPUT
+
+      # ===== SECURITY SCAN =====
+      - name: Run Trivy vulnerability scanner on frontend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.build-frontend.outputs.image }}
+          format: 'sarif'
+          output: 'trivy-results-frontend.sarif'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: true  # Don't fail pipeline on vulnerabilities, just report
+
+      - name: Run Trivy vulnerability scanner on backend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.build-backend.outputs.image }}
+          format: 'sarif'
+          output: 'trivy-results-backend.sarif'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: true  # Don't fail pipeline on vulnerabilities, just report
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results-frontend.sarif'
+          wait-for-processing: false
+
+      - name: Upload Trivy results to GitHub Security (backend)
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results-backend.sarif'
+          wait-for-processing: false
 
       # ===== PUSH DOCKER IMAGES =====
       - name: Log in to GitHub Container Registry
@@ -69,5 +130,7 @@ jobs:
       - name: Push Docker images
         run: |
           REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          docker push ghcr.io/${REPO_OWNER}/dms-frontend:${{ steps.version.outputs.version }}
           docker push ghcr.io/${REPO_OWNER}/dms-frontend:latest
+          docker push ghcr.io/${REPO_OWNER}/dms-backend:${{ steps.version.outputs.version }}
           docker push ghcr.io/${REPO_OWNER}/dms-backend:latest
