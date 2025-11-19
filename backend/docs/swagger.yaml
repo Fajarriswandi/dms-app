@@ -1,5 +1,12 @@
 basePath: /api/v1
 definitions:
+  main.AuthResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/main.User'
+    type: object
   main.Document:
     properties:
       content:
@@ -13,6 +20,47 @@ definitions:
       title:
         type: string
       updated_at:
+        type: string
+    type: object
+  main.ErrorResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  main.LoginRequest:
+    properties:
+      password:
+        example: password123
+        type: string
+      username:
+        example: admin
+        type: string
+    type: object
+  main.RegisterRequest:
+    properties:
+      email:
+        example: admin@example.com
+        type: string
+      password:
+        example: password123
+        type: string
+      username:
+        example: admin
+        type: string
+    type: object
+  main.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      updated_at:
+        type: string
+      username:
         type: string
     type: object
 host: localhost:8080
@@ -62,11 +110,88 @@ paths:
       summary: API Information
       tags:
       - General
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return JWT token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/main.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.AuthResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: User login
+      tags:
+      - Authentication
+  /api/v1/auth/profile:
+    get:
+      consumes:
+      - application/json
+      description: Get current authenticated user profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.User'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user profile
+      tags:
+      - Authentication
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user account
+      parameters:
+      - description: User registration data
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/main.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/main.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Register new user
+      tags:
+      - Authentication
   /api/v1/documents:
     get:
       consumes:
       - application/json
-      description: Returns a list of all documents
+      description: Returns a list of all documents (requires authentication)
       produces:
       - application/json
       responses:
@@ -76,13 +201,19 @@ paths:
             items:
               $ref: '#/definitions/main.Document'
             type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Get all documents
       tags:
       - Documents
     post:
       consumes:
       - application/json
-      description: Creates a new document
+      description: Creates a new document (requires authentication)
       parameters:
       - description: Document object
         in: body
@@ -100,9 +231,13 @@ paths:
         "400":
           description: Bad Request
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/main.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Create document
       tags:
       - Documents
@@ -110,7 +245,7 @@ paths:
     delete:
       consumes:
       - application/json
-      description: Deletes a document by ID
+      description: Deletes a document by ID (requires authentication)
       parameters:
       - description: Document ID
         in: path
@@ -126,19 +261,23 @@ paths:
             additionalProperties:
               type: string
             type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Delete document
       tags:
       - Documents
     get:
       consumes:
       - application/json
-      description: Returns a single document by ID
+      description: Returns a single document by ID (requires authentication)
       parameters:
       - description: Document ID
         in: path
@@ -152,19 +291,23 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/main.Document'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Get document by ID
       tags:
       - Documents
     put:
       consumes:
       - application/json
-      description: Updates an existing document
+      description: Updates an existing document (requires authentication)
       parameters:
       - description: Document ID
         in: path
@@ -184,12 +327,16 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/main.Document'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Update document
       tags:
       - Documents
@@ -211,6 +358,9 @@ paths:
       tags:
       - General
 securityDefinitions:
-  BasicAuth:
-    type: basic
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

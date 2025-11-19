@@ -27,7 +27,10 @@ import (
 // @host      localhost:8080
 // @BasePath  /api/v1
 
-// @securityDefinitions.basic  BasicAuth
+// @securityDefinitions.apikey  BearerAuth
+// @in                          header
+// @name                        Authorization
+// @description                 Type "Bearer" followed by a space and JWT token.
 func main() {
 	r := chi.NewRouter()
 
@@ -36,13 +39,14 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(SecurityHeadersMiddleware) // Security headers
 
-	// CORS
+	// CORS with security improvements
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:3000"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"},
+		ExposedHeaders:   []string{"Link", "X-Total-Count"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
@@ -54,11 +58,26 @@ func main() {
 	// API v1
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/", apiInfoHandler)
-		r.Get("/documents", getDocumentsHandler)
-		r.Get("/documents/{id}", getDocumentHandler)
-		r.Post("/documents", createDocumentHandler)
-		r.Put("/documents/{id}", updateDocumentHandler)
-		r.Delete("/documents/{id}", deleteDocumentHandler)
+
+		// Authentication routes (public)
+		r.Post("/auth/register", Register)
+		r.Post("/auth/login", Login)
+
+		// Protected routes (require JWT)
+		r.Group(func(r chi.Router) {
+			r.Use(JWTAuthMiddleware)
+			r.Get("/auth/profile", GetProfile)
+		})
+
+		// Documents routes (protected)
+		r.Group(func(r chi.Router) {
+			r.Use(JWTAuthMiddleware)
+			r.Get("/documents", getDocumentsHandler)
+			r.Get("/documents/{id}", getDocumentHandler)
+			r.Post("/documents", createDocumentHandler)
+			r.Put("/documents/{id}", updateDocumentHandler)
+			r.Delete("/documents/{id}", deleteDocumentHandler)
+		})
 	})
 
 	// Swagger
@@ -141,11 +160,13 @@ type Document struct {
 
 // getDocumentsHandler returns list of documents
 // @Summary      Get all documents
-// @Description  Returns a list of all documents
+// @Description  Returns a list of all documents (requires authentication)
 // @Tags         Documents
 // @Accept       json
 // @Produce      json
+// @Security     BearerAuth
 // @Success      200  {array}   Document
+// @Failure      401  {object}  ErrorResponse
 // @Router       /api/v1/documents [get]
 func getDocumentsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -172,13 +193,15 @@ func getDocumentsHandler(w http.ResponseWriter, r *http.Request) {
 
 // getDocumentHandler returns a single document
 // @Summary      Get document by ID
-// @Description  Returns a single document by ID
+// @Description  Returns a single document by ID (requires authentication)
 // @Tags         Documents
 // @Accept       json
 // @Produce      json
+// @Security     BearerAuth
 // @Param        id   path      string  true  "Document ID"
 // @Success      200  {object}  Document
-// @Failure      404  {object}  map[string]string
+// @Failure      401  {object}  ErrorResponse
+// @Failure      404  {object}  ErrorResponse
 // @Router       /api/v1/documents/{id} [get]
 func getDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
@@ -196,13 +219,15 @@ func getDocumentHandler(w http.ResponseWriter, r *http.Request) {
 
 // createDocumentHandler creates a new document
 // @Summary      Create document
-// @Description  Creates a new document
+// @Description  Creates a new document (requires authentication)
 // @Tags         Documents
 // @Accept       json
 // @Produce      json
+// @Security     BearerAuth
 // @Param        document  body      Document  true  "Document object"
 // @Success      201       {object}  Document
-// @Failure      400       {object}  map[string]string
+// @Failure      400       {object}  ErrorResponse
+// @Failure      401       {object}  ErrorResponse
 // @Router       /api/v1/documents [post]
 func createDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -219,14 +244,16 @@ func createDocumentHandler(w http.ResponseWriter, r *http.Request) {
 
 // updateDocumentHandler updates a document
 // @Summary      Update document
-// @Description  Updates an existing document
+// @Description  Updates an existing document (requires authentication)
 // @Tags         Documents
 // @Accept       json
 // @Produce      json
+// @Security     BearerAuth
 // @Param        id        path      string    true  "Document ID"
 // @Param        document  body      Document  true  "Document object"
 // @Success      200       {object}  Document
-// @Failure      404       {object}  map[string]string
+// @Failure      401       {object}  ErrorResponse
+// @Failure      404       {object}  ErrorResponse
 // @Router       /api/v1/documents/{id} [put]
 func updateDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
@@ -244,13 +271,15 @@ func updateDocumentHandler(w http.ResponseWriter, r *http.Request) {
 
 // deleteDocumentHandler deletes a document
 // @Summary      Delete document
-// @Description  Deletes a document by ID
+// @Description  Deletes a document by ID (requires authentication)
 // @Tags         Documents
 // @Accept       json
 // @Produce      json
+// @Security     BearerAuth
 // @Param        id   path      string  true  "Document ID"
 // @Success      200  {object}  map[string]string
-// @Failure      404  {object}  map[string]string
+// @Failure      401  {object}  ErrorResponse
+// @Failure      404  {object}  ErrorResponse
 // @Router       /api/v1/documents/{id} [delete]
 func deleteDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
