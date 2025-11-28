@@ -15,8 +15,21 @@
 - Jangan trigger deployment otomatis pada setiap commit
 - Tunggu user meminta untuk deploy
 
+## Dokumentasi (.md files)
+- **JANGAN BUAT FILE .md** kecuali benar-benar penting
+- **SELALU KONFIRMASI** dengan user sebelum membuat file .md baru
+- Jika user setuju, simpan file .md di folder `documentations/`
+- Jangan buat dokumentasi yang redundant atau tidak diperlukan
+- Prioritaskan dokumentasi yang:
+  - Menjelaskan konfigurasi penting (seperti manual fixes)
+  - Menjelaskan troubleshooting steps yang kompleks
+  - Menjelaskan architecture atau design decisions
+- Hindari dokumentasi untuk:
+  - Temporary fixes yang sudah selesai
+  - Steps yang sudah jelas dari code/comments
+  - Informasi yang mudah ditemukan di dokumentasi lain
+
 ## Best Practices
 - Buat commit dengan message yang jelas dalam Bahasa Indonesia
 - Group related changes dalam satu commit jika memungkinkan
 - Test changes secara lokal sebelum commit jika memungkinkan
-
