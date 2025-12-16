@@ -348,6 +348,10 @@ func (uc *companyUseCase) CreateCompanyFull(data *domain.CompanyCreateRequest) (
 		if dir.StartDate != nil && !dir.StartDate.Time.IsZero() {
 			startDate = &dir.StartDate.Time
 		}
+		var endDate *time.Time
+		if dir.EndDate != nil && !dir.EndDate.Time.IsZero() {
+			endDate = &dir.EndDate.Time
+		}
 		director := &domain.DirectorModel{
 			ID:              uuid.GenerateUUID(),
 			CompanyID:       company.ID,
@@ -356,6 +360,7 @@ func (uc *companyUseCase) CreateCompanyFull(data *domain.CompanyCreateRequest) (
 			KTP:             dir.KTP,
 			NPWP:            dir.NPWP,
 			StartDate:       startDate,
+			EndDate:         endDate,
 			DomicileAddress: dir.DomicileAddress,
 		}
 		if err := uc.directorRepo.Create(director); err != nil {
@@ -641,6 +646,13 @@ func (uc *companyUseCase) UpdateCompanyFull(id string, data *domain.CompanyUpdat
 				startDate = &dateOnly.Time
 			}
 		}
+		var endDate *time.Time
+		if dir.EndDate != nil {
+			dateOnly := *dir.EndDate
+			if !dateOnly.IsZero() {
+				endDate = &dateOnly.Time
+			}
+		}
 
 		// Match director berdasarkan identifier (full_name + ktp)
 		key := dir.FullName + "|" + dir.KTP
@@ -653,6 +665,7 @@ func (uc *companyUseCase) UpdateCompanyFull(id string, data *domain.CompanyUpdat
 			existingDirector.KTP = dir.KTP
 			existingDirector.NPWP = dir.NPWP
 			existingDirector.StartDate = startDate
+			existingDirector.EndDate = endDate
 			existingDirector.DomicileAddress = dir.DomicileAddress
 			existingDirector.CompanyID = company.ID
 
@@ -678,6 +691,7 @@ func (uc *companyUseCase) UpdateCompanyFull(id string, data *domain.CompanyUpdat
 				KTP:             dir.KTP,
 				NPWP:            dir.NPWP,
 				StartDate:       startDate,
+				EndDate:         endDate,
 				DomicileAddress: dir.DomicileAddress,
 			}
 			if err := uc.directorRepo.Create(director); err != nil {
